@@ -1,1 +1,0 @@
-export * from "./ConnectionString.Credentials";

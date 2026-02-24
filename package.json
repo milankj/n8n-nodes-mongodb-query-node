@@ -8,8 +8,8 @@
         "n8n-community-node-package"
     ],
     "author": {
-        "name": "gridhotshell",
-        "email": "grid.shot.shell@gmail.com"
+        "name": "milankj",
+        "email": "milanjain005@gmail.com"
     },
     "repository": {
         "type": "git",
@@ -30,9 +30,7 @@
     "n8n": {
         "n8nNodesApiVersion": 1,
         "strict": true,
-        "credentials": [
-            "dist/Credentials/ConnectionString.Credentials.js"
-        ],
+        "credentials": [],
         "nodes": [
             "dist/nodes/MongodbQuery/MongodbQuery.node.js"
         ]
