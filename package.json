@@ -1,7 +1,7 @@
 {
     "name": "n8n-nodes-mongodb-query-node",
     "version": "0.1.0",
-    "description": "",
+    "description": "An n8n community node for executing complex MongoDB operations directly via JSON queries, enabling advanced update operators like $pull.",
     "license": "MIT",
     "homepage": "",
     "keywords": [
