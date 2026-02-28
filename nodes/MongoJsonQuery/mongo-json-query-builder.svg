@@ -1,0 +1,26 @@
+<svg width="600" height="780" viewBox="0 0 200 260" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="leafGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#4DB33D"/>
+      <stop offset="100%" stop-color="#1B5E20"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Top Broken Leaf Piece -->
+  <path
+    d="M100 20
+       C135 70, 150 120, 115 155
+       C110 160, 90 160, 85 155
+       C50 120, 65 70, 100 20 Z"
+    fill="url(#leafGradient)"
+  />
+
+  <!-- Bottom Broken Leaf Piece -->
+  <path
+    d="M85 170
+       C95 180, 105 180, 115 170
+       C125 200, 115 225, 100 245
+       C85 225, 75 200, 85 170 Z"
+    fill="url(#leafGradient)"
+  />
+</svg>

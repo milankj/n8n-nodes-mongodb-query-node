@@ -1,8 +1,11 @@
 {
-	"node": "n8n-nodes-mongodb-query-node",
+	"node": "n8n-nodes-mongodb-json-query-builder",
 	"nodeVersion": "1.0",
 	"codexVersion": "1.0",
-	"categories": ["Development", "Developer Tools"],
+	"categories": [
+		"Development",
+		"Developer Tools"
+	],
 	"resources": {
 		"credentialDocumentation": [
 			{

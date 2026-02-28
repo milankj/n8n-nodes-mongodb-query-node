@@ -8,23 +8,23 @@ import type {
 import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 // import { MongoDb } from '../../Credentials/Mongodb.Credentials';
 
-export class MongodbQuery implements INodeType {
+export class MongoJsonQuery implements INodeType {
 	description: INodeTypeDescription = {
-		displayName: 'Mongo JSON Query Builder',
-		name: 'mongoJsonQueryBuilder',
-		icon: { light: 'file:mongo-json-query-builder.svg', dark: 'file:mongo-json-query-builder.svg' },
+		displayName: 'MongoJsonQuery',
+		name: 'mongoJsonQuery',
+		icon: { light: 'file:mongo-json-query-builder.svg', dark: 'file:mongo-json-query-builder-dark.svg' },
 		group: ['input'],
 		version: 1,
 		description: 'Basic Example Node',
 		defaults: {
-			name: 'Mongo JSON Query Builder',
+			name: 'MongoJsonQuery',
 		},
 		inputs: [NodeConnectionTypes.Main],
 		outputs: [NodeConnectionTypes.Main],
 		usableAsTool: true,
 		credentials: [
 			{
-				name: "mongoDb",
+				name: 'mongoDb',
 				required: true
 			}
 		],
@@ -33,30 +33,35 @@ export class MongodbQuery implements INodeType {
 				displayName: 'Operation',
 				name: 'operation',
 				type: 'options',
+				noDataExpression: true,
 				options: [
 					{
 						name: "Find",
 						value: "find",
-						description: "Mongo find operation",
+						description: 'Retrieve documents that match the given query',
+						action: 'Mongo find operation',
 					},
 					{
 						name: "Insert",
 						value: "insert",
-						description: "Mongo insert operation"
+						description: 'Insert a new document into the collection',
+						action: 'Mongo insert operation',
 					},
 					{
 						name: "Update",
 						value: "update",
-						description: "Mongo update operation"
+						description: 'Insert a new document into the collection',
+						action: 'Mongo insert operation',
 					},
 					{
 						name: "Delete",
 						value: "delete",
-						description: "Mongo delete operation"
+						description: 'Delete documents that match the given query',
+						action: 'Mongo delete operation',
 					}
 				],
 				default: 'find',
-				description: 'Select the operation for query',
+
 			},
 			{
 				displayName: 'Collection',
@@ -64,7 +69,7 @@ export class MongodbQuery implements INodeType {
 				type: 'string',
 				default: '',
 				required: true,
-				description: 'Select the operation for query',
+				description: 'The name of the MongoDB collection to operate on',
 			},
 			{
 				displayName: 'Query (JSON)',
@@ -76,7 +81,7 @@ export class MongodbQuery implements INodeType {
 						operation: ['find', 'delete'],
 					},
 				},
-				description: 'A JSON object defining the search query. Example: {"name": "John"}',
+				description: 'A JSON object defining the search query. Example: {"name": "John"}.',
 			},
 			{
 				displayName: 'Filter (JSON)',
@@ -88,7 +93,7 @@ export class MongodbQuery implements INodeType {
 						operation: ['update'],
 					},
 				},
-				description: 'A JSON object defining the filter condition. Example: {"_id": "123"}',
+				description: 'A JSON object defining the filter condition. Example: {"_id": "123"}.',
 			},
 			{
 				displayName: 'Update (JSON)',
@@ -100,7 +105,7 @@ export class MongodbQuery implements INodeType {
 						operation: ['update'],
 					},
 				},
-				description: 'A JSON object defining the update operations. Example: {"$set": {"status": "active"}}',
+				description: 'A JSON object defining the update operations. Example: {"$set": {"status": "active"}}.',
 			},
 			{
 				displayName: 'Upsert',
@@ -136,7 +141,7 @@ export class MongodbQuery implements INodeType {
 						operation: ['insert'],
 					},
 				},
-				description: 'A JSON object (or array of objects) defining the document(s) to insert. Example: {"name": "John", "age": 30}',
+				description: 'A JSON object (or array of objects) defining the document(s) to insert. Example: {"name": "John", "age": 30}.',
 			},
 			{
 				displayName: 'Options',
@@ -157,7 +162,7 @@ export class MongodbQuery implements INodeType {
 						typeOptions: {
 							minValue: 1,
 						},
-						default: 10,
+						default: 50,
 						description: 'Max number of results to return',
 					},
 					{
@@ -175,14 +180,14 @@ export class MongodbQuery implements INodeType {
 						name: 'sort',
 						type: 'json',
 						default: '{}',
-						description: 'A JSON object defining the sorting order. Example: {"createdAt": -1}',
+						description: 'A JSON object defining the sorting order. Example: {"createdAt": -1}.',
 					},
 					{
 						displayName: 'Projection (JSON)',
 						name: 'projection',
 						type: 'json',
 						default: '{}',
-						description: 'A JSON object defining which fields to include/exclude. Example: {"_id": 0, "name": 1}',
+						description: 'A JSON object defining which fields to include/exclude. Example: {"_id": 0, "name": 1}.',
 					},
 				],
 			},
@@ -192,7 +197,19 @@ export class MongodbQuery implements INodeType {
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
 		const items = this.getInputData();
 		const credentials = await this.getCredentials('mongoDb');
-		const client = new MongoClient(credentials.connectionString as string);
+
+		let connectionString = credentials.connectionString as string;
+		if (credentials.connectionType === 'hostAndPort') {
+			const host = credentials.host as string;
+			const port = credentials.port as number;
+			const user = credentials.user as string;
+			const password = credentials.password as string;
+
+			const auth = user ? `${encodeURIComponent(user)}:${encodeURIComponent(password)}@` : '';
+			connectionString = `mongodb://${auth}${host}:${port}`;
+		}
+
+		const client = new MongoClient(connectionString);
 		await client.connect();
 		try {
 			const db = client.db(credentials.database as string);
@@ -214,12 +231,12 @@ export class MongodbQuery implements INodeType {
 								parsedQuery[key] = new ObjectId(value.$oid);
 							}
 						}
-						const options = this.getNodeParameter('options', itemIndex, {}) as any;
+						const options = this.getNodeParameter('options', itemIndex, {}) as { limit?: number, skip?: number, sort?: string, projection?: string } | undefined;
 
-						const limit = options.limit as number | undefined;
-						const skip = options.skip as number | undefined;
-						const sortCode = options.sort as string | undefined;
-						const projectionCode = options.projection as string | undefined;
+						const limit = options && options.limit as number | undefined;
+						const skip = options && options.skip as number | undefined;
+						const sortCode = options && options.sort as string | undefined;
+						const projectionCode = options && options.projection as string | undefined;
 
 						const sort = sortCode ? (typeof sortCode === 'string' ? JSON.parse(sortCode) : sortCode) : undefined;
 						const projection = projectionCode ? (typeof projectionCode === 'string' ? JSON.parse(projectionCode) : projectionCode) : undefined;
@@ -269,7 +286,7 @@ export class MongodbQuery implements INodeType {
 						const updateFilterStr = this.getNodeParameter('updateFilter', itemIndex, {}) as string;
 						const updateDataStr = this.getNodeParameter('updateData', itemIndex, {}) as string;
 
-						let updateFilter = typeof updateFilterStr === 'string' ? JSON.parse(updateFilterStr || '{}') : updateFilterStr;
+						const updateFilter = typeof updateFilterStr === 'string' ? JSON.parse(updateFilterStr || '{}') : updateFilterStr;
 						const updateData = typeof updateDataStr === 'string' ? JSON.parse(updateDataStr || '{"$set": {}}') : updateDataStr;
 
 						const upsert = this.getNodeParameter('upsert', itemIndex, false) as boolean;
@@ -319,8 +336,8 @@ export class MongodbQuery implements INodeType {
 						}
 
 					} else if (operation === 'delete') {
-						let deleteQueryStr = this.getNodeParameter('query', itemIndex, {}) as string;
-						let deleteQuery = typeof deleteQueryStr === 'string' ? JSON.parse(deleteQueryStr || '{}') : deleteQueryStr;
+						const deleteQueryStr = this.getNodeParameter('query', itemIndex, {}) as string;
+						const deleteQuery = typeof deleteQueryStr === 'string' ? JSON.parse(deleteQueryStr || '{}') : deleteQueryStr;
 						const collection = db.collection(collectionName);
 						try {
 							for (const key in deleteQuery) {
