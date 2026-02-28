@@ -48,6 +48,11 @@ export class MongodbQuery implements INodeType {
 						name: "Update",
 						value: "update",
 						description: "Mongo update operation"
+					},
+					{
+						name: "Delete",
+						value: "delete",
+						description: "Mongo delete operation"
 					}
 				],
 				default: 'find',
@@ -68,7 +73,7 @@ export class MongodbQuery implements INodeType {
 				default: '{}',
 				displayOptions: {
 					show: {
-						operation: ['find'],
+						operation: ['find', 'delete'],
 					},
 				},
 				description: 'A JSON object defining the search query. Example: {"name": "John"}',
@@ -184,212 +189,218 @@ export class MongodbQuery implements INodeType {
 		],
 	};
 
-	// The function below is responsible for actually doing whatever this node
-	// is supposed to do. In this case, we're just appending the `myString` property
-	// with whatever the user has entered.
-	// You can make async calls and use `await`.
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
 		const items = this.getInputData();
 		const credentials = await this.getCredentials('mongoDb');
-		// const connectionStringWithDb = `${credentials.connectionString}${credentials.database}`;
 		const client = new MongoClient(credentials.connectionString as string);
-		this.logger.debug("credentidal", { credentials });
 		await client.connect();
-		const db = client.db(credentials.database as string);
-		db.databaseName;
-		this.logger.debug("db.collection", { dbName: db.databaseName });
-
-		// Iterates over all input items and add the key "myString" with the
-		// value the parameter "myString" resolves to.
-		// (This could be a different value for each item in case it contains an expression)
-		const length = items.length;
-		for (let itemIndex = 0; itemIndex < length; itemIndex++) {
-			try {
-				const operation = this.getNodeParameter('operation', itemIndex) as string;
-				const collectionName = this.getNodeParameter('collection', itemIndex) as string;
-				const query = this.getNodeParameter('query', itemIndex, {}) as string;
-				this.logger.debug("geelo", { query });
-				const parsedQuery = typeof query === 'string' ? JSON.parse(query || '{}') : query;
-				this.logger.debug("parsedQuery", { parsedQuery });
-				if (operation === 'find') {
-					const options = this.getNodeParameter('options', itemIndex, {}) as any;
-
-					const limit = options.limit as number | undefined;
-					const skip = options.skip as number | undefined;
-					const sortCode = options.sort as string | undefined;
-					const projectionCode = options.projection as string | undefined;
-
-					const sort = sortCode ? (typeof sortCode === 'string' ? JSON.parse(sortCode) : sortCode) : undefined;
-					const projection = projectionCode ? (typeof projectionCode === 'string' ? JSON.parse(projectionCode) : projectionCode) : undefined;
-
-					// console.log("db",db);
-					const collection = db.collection(collectionName);
-					this.logger.debug('MongoDB Collection Info', { collectionName, database: db.databaseName });
-					let findCursor = collection.find(parsedQuery);
-
-					if (sort) {
-						findCursor = findCursor.sort(sort);
-					}
-
-					if (skip !== undefined) {
-						findCursor = findCursor.skip(skip);
-					}
-
-					if (limit !== undefined) {
-						findCursor = findCursor.limit(limit);
-					}
-
-					if (projection) {
-						findCursor = findCursor.project(projection);
-					}
-
-
-					const resultItems = await findCursor.toArray();
-
-					// If no items were returned, clear the input item to avoid returning empty results
-					if (resultItems.length === 0) {
-						items[itemIndex].json = {};
-					} else {
-						resultItems.forEach((result, index) => {
-							if (index === 0) {
-								// For the first item, replace the existing item
-								items[itemIndex].json = result;
-							} else {
-								// For subsequent items, add to the output data
-								items.push({
-									json: result,
-									pairedItem: itemIndex,
-								});
-							}
-						});
-					}
-
-					this.logger.debug("item", { items });
-				} else if (operation === 'update') {
-					const updateFilterStr = this.getNodeParameter('updateFilter', itemIndex, {}) as string;
-					const updateDataStr = this.getNodeParameter('updateData', itemIndex, {}) as string;
-
-					let updateFilter = typeof updateFilterStr === 'string' ? JSON.parse(updateFilterStr || '{}') : updateFilterStr;
-					const updateData = typeof updateDataStr === 'string' ? JSON.parse(updateDataStr || '{"$set": {}}') : updateDataStr;
-
-					this.logger.debug("updateFilter", { updateFilter });
-					this.logger.debug("updateData", { updateData });
-
-					const upsert = this.getNodeParameter('upsert', itemIndex, false) as boolean;
-					const returnUpdatedDocument = this.getNodeParameter('returnUpdatedDocument', itemIndex, false) as boolean;
-
-					const collection = db.collection(collectionName);
-					this.logger.debug('MongoDB Collection Info', { collectionName, database: db.databaseName });
-
-					let result;
-					try {
-						for (const key in updateFilter) {
-							const value = updateFilter[key];
-
+		try {
+			const db = client.db(credentials.database as string);
+			db.databaseName;
+			const length = items.length;
+			for (let itemIndex = 0; itemIndex < length; itemIndex++) {
+				try {
+					const operation = this.getNodeParameter('operation', itemIndex) as string;
+					const collectionName = this.getNodeParameter('collection', itemIndex) as string;
+					const query = this.getNodeParameter('query', itemIndex, {}) as string;
+					this.logger.debug("geelo", { query });
+					const parsedQuery = typeof query === 'string' ? JSON.parse(query || '{}') : query;
+					this.logger.debug("parsedQuery", { parsedQuery });
+					if (operation === 'find') {
+						for (const key in parsedQuery) {
+							const value = parsedQuery[key];
 							if (value && typeof value === "object" && "$oid" in value && typeof value.$oid === "string"
 							) {
-								updateFilter[key] = new ObjectId(value.$oid);
+								parsedQuery[key] = new ObjectId(value.$oid);
 							}
 						}
-						result = await collection.updateMany(updateFilter, updateData, { upsert });
-						if (returnUpdatedDocument) {
-							const returnCursor = collection.find(updateFilter);
-							const returnResult = await returnCursor.toArray();
-							returnResult.forEach((result, index) => {
+						const options = this.getNodeParameter('options', itemIndex, {}) as any;
+
+						const limit = options.limit as number | undefined;
+						const skip = options.skip as number | undefined;
+						const sortCode = options.sort as string | undefined;
+						const projectionCode = options.projection as string | undefined;
+
+						const sort = sortCode ? (typeof sortCode === 'string' ? JSON.parse(sortCode) : sortCode) : undefined;
+						const projection = projectionCode ? (typeof projectionCode === 'string' ? JSON.parse(projectionCode) : projectionCode) : undefined;
+
+						const collection = db.collection(collectionName);
+
+						let findCursor = collection.find(parsedQuery);
+
+						if (sort) {
+							findCursor = findCursor.sort(sort);
+						}
+
+						if (skip !== undefined) {
+							findCursor = findCursor.skip(skip);
+						}
+
+						if (limit !== undefined) {
+							findCursor = findCursor.limit(limit);
+						}
+
+						if (projection) {
+							findCursor = findCursor.project(projection);
+						}
+
+
+						const resultItems = await findCursor.toArray();
+
+						// If no items were returned, clear the input item to avoid returning empty results
+						if (resultItems.length === 0) {
+							items[itemIndex].json = {};
+						} else {
+							resultItems.forEach((result, index) => {
 								if (index === 0) {
+									// For the first item, replace the existing item
 									items[itemIndex].json = result;
 								} else {
+									// For subsequent items, add to the output data
 									items.push({
 										json: result,
 										pairedItem: itemIndex,
 									});
 								}
 							});
-						} else {
-							items[itemIndex].json = {
-								matchedCount: result.matchedCount,
-								modifiedCount: result.modifiedCount,
-							}
-							if (result.upsertedId) {
-								items[itemIndex].json.upsertedId = result.upsertedId;
-								items[itemIndex].json.upsertedCount = result.upsertedCount;
-							}
 						}
-					} catch (error) {
-						items[itemIndex].json = { error: error.message };
-						if (!this.continueOnFail()) {
-							throw error;
-						}
-					}
 
-				} else if (operation === 'insert') {
-					const insertDocStr = this.getNodeParameter('insertDocument', itemIndex, {}) as string;
-					const insertDoc = typeof insertDocStr === 'string' ? JSON.parse(insertDocStr || '{}') : insertDocStr;
+					} else if (operation === 'update') {
+						const updateFilterStr = this.getNodeParameter('updateFilter', itemIndex, {}) as string;
+						const updateDataStr = this.getNodeParameter('updateData', itemIndex, {}) as string;
 
-					// Convert any $oid strings into ObjectIds
-					// const insertDoc = convertObjectIds(insertDocRaw);
-					this.logger.debug("insertDocument", { insertDoc });
+						let updateFilter = typeof updateFilterStr === 'string' ? JSON.parse(updateFilterStr || '{}') : updateFilterStr;
+						const updateData = typeof updateDataStr === 'string' ? JSON.parse(updateDataStr || '{"$set": {}}') : updateDataStr;
 
-					const collection = db.collection(collectionName);
-					this.logger.debug('MongoDB Collection Info', { collectionName, database: db.databaseName });
+						const upsert = this.getNodeParameter('upsert', itemIndex, false) as boolean;
+						const returnUpdatedDocument = this.getNodeParameter('returnUpdatedDocument', itemIndex, false) as boolean;
 
-					let result;
-					try {
-						if (Array.isArray(insertDoc)) {
-							result = await collection.insertMany(insertDoc);
+						const collection = db.collection(collectionName);
 
-							insertDoc.forEach((doc, index) => {
-								if (index === 0) {
-									items[itemIndex].json = doc;
-								} else {
-									items.push({
-										json: doc,
-										pairedItem: itemIndex,
-									});
+						let result;
+						try {
+							for (const key in updateFilter) {
+								const value = updateFilter[key];
+
+								if (value && typeof value === "object" && "$oid" in value && typeof value.$oid === "string"
+								) {
+									updateFilter[key] = new ObjectId(value.$oid);
 								}
-							});
-							// items[itemIndex].json = {
-							// 	insertedCount: result.insertedCount,
-							// 	insertedIds: result.insertedIds,
-							// };
-						} else {
-							result = await collection.insertOne(insertDoc);
-							items[itemIndex].json = {
-								...insertDoc
-							};
+							}
+							result = await collection.updateMany(updateFilter, updateData, { upsert });
+							if (returnUpdatedDocument) {
+								const returnCursor = collection.find(updateFilter);
+								const returnResult = await returnCursor.toArray();
+								returnResult.forEach((result, index) => {
+									if (index === 0) {
+										items[itemIndex].json = result;
+									} else {
+										items.push({
+											json: result,
+											pairedItem: itemIndex,
+										});
+									}
+								});
+							} else {
+								items[itemIndex].json = {
+									matchedCount: result.matchedCount,
+									modifiedCount: result.modifiedCount,
+								}
+								if (result.upsertedId) {
+									items[itemIndex].json.upsertedId = result.upsertedId;
+									items[itemIndex].json.upsertedCount = result.upsertedCount;
+								}
+							}
+						} catch (error) {
+							items[itemIndex].json = { error: error.message };
+							if (!this.continueOnFail()) {
+								throw error;
+							}
 						}
-					} catch (error) {
-						items[itemIndex].json = { error: error.message };
-						if (!this.continueOnFail()) {
+
+					} else if (operation === 'delete') {
+						let deleteQueryStr = this.getNodeParameter('query', itemIndex, {}) as string;
+						let deleteQuery = typeof deleteQueryStr === 'string' ? JSON.parse(deleteQueryStr || '{}') : deleteQueryStr;
+						const collection = db.collection(collectionName);
+						try {
+							for (const key in deleteQuery) {
+								const value = deleteQuery[key];
+
+								if (value && typeof value === "object" && "$oid" in value && typeof value.$oid === "string") {
+									deleteQuery[key] = new ObjectId(value.$oid);
+								}
+							}
+
+							const result = await collection.deleteMany(deleteQuery);
+
+							items[itemIndex].json = {
+								deletedCount: result.deletedCount,
+								acknowledged: result.acknowledged
+							};
+						} catch (error) {
+							items[itemIndex].json = { error: error.message };
+							if (!this.continueOnFail()) {
+								throw error;
+							}
+						}
+					} else if (operation === 'insert') {
+						const insertDocStr = this.getNodeParameter('insertDocument', itemIndex, {}) as string;
+						const insertDoc = typeof insertDocStr === 'string' ? JSON.parse(insertDocStr || '{}') : insertDocStr;
+
+						const collection = db.collection(collectionName);
+						try {
+							if (Array.isArray(insertDoc)) {
+								await collection.insertMany(insertDoc);
+
+								insertDoc.forEach((doc, index) => {
+									if (index === 0) {
+										items[itemIndex].json = doc;
+									} else {
+										items.push({
+											json: doc,
+											pairedItem: itemIndex,
+										});
+									}
+								});
+							} else {
+								await collection.insertOne(insertDoc);
+								items[itemIndex].json = {
+									...insertDoc
+								};
+							}
+						} catch (error) {
+							items[itemIndex].json = { error: error.message };
+							if (!this.continueOnFail()) {
+								throw error;
+							}
+						}
+					} else {
+						// Fallback for missing operation
+						items[itemIndex].json = { error: 'Operation not implemented' };
+					}
+
+				} catch (error) {
+					// This node should never fail but we want to showcase how
+					// to handle errors.
+					if (this.continueOnFail()) {
+						items.push({ json: this.getInputData(itemIndex)[0].json, error, pairedItem: itemIndex });
+					} else {
+						// Adding `itemIndex` allows other workflows to handle this error
+						if (error.context) {
+							// If the error thrown already contains the context property,
+							// only append the itemIndex
+							error.context.itemIndex = itemIndex;
 							throw error;
 						}
+						throw new NodeOperationError(this.getNode(), error, {
+							itemIndex,
+						});
 					}
-				} else {
-					// Fallback for missing operation
-					items[itemIndex].json = { error: 'Operation not implemented' };
-				}
-
-			} catch (error) {
-				// This node should never fail but we want to showcase how
-				// to handle errors.
-				if (this.continueOnFail()) {
-					items.push({ json: this.getInputData(itemIndex)[0].json, error, pairedItem: itemIndex });
-				} else {
-					// Adding `itemIndex` allows other workflows to handle this error
-					if (error.context) {
-						// If the error thrown already contains the context property,
-						// only append the itemIndex
-						error.context.itemIndex = itemIndex;
-						throw error;
-					}
-					throw new NodeOperationError(this.getNode(), error, {
-						itemIndex,
-					});
 				}
 			}
+		} finally {
+			await client.close();
 		}
-		this.logger.debug("heelow", { size: items.length });
-		await client.close();
 		return [items];
 	}
 }
